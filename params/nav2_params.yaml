@@ -17,8 +17,8 @@ amcl:
     laser_min_range: -1.0
     laser_model_type: "likelihood_field"
     max_beams: 60
-    max_particles: 2000
-    min_particles: 500
+    max_particles: 300
+    min_particles: 100
     odom_frame_id: "odom"
     pf_err: 0.05
     pf_z: 0.99
@@ -67,7 +67,7 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
-    controller_frequency: 20.0
+    controller_frequency: 10.0
     costmap_update_timeout: 0.30
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -96,9 +96,9 @@ controller_server:
       yaw_goal_tolerance: 0.25
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
-      time_steps: 56
-      model_dt: 0.05
-      batch_size: 2000
+      time_steps: 30
+      model_dt: 0.1
+      batch_size: 600
       ax_max: 4.0
       ax_min: -4.0
       ay_max: 4.0
@@ -188,14 +188,14 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      update_frequency: 3.0
+      publish_frequency: 1.0
       global_frame: odom
       robot_base_frame: base_link
       rolling_window: true
-      width: 8
-      height: 8
-      resolution: 0.05
+      width: 6
+      height: 6
+      resolution: 0.1
       robot_radius: 0.30
       plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
@@ -228,7 +228,7 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_link
       robot_radius: 0.30
-      resolution: 0.05
+      resolution: 0.1
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:

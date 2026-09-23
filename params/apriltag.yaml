@@ -1,4 +1,4 @@
-apriltag_node:
+apriltag:
   ros__parameters:
     family: "36h11"
-    size: 0.24
+    size: 0.48

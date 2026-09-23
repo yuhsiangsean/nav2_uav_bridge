@@ -143,6 +143,83 @@ rviz2 -d /opt/ros/jazzy/share/nav2_bringup/rviz/nav2_default_view.rviz --ros-arg
 是已知會在長時間運行後卡死的節點（見下方注意事項），分開才能只重開終端機 3，
 不用連 Nav2 整套一起重開。
 
+## 真機測試（`nav2_uav_bringup_real_launch.py`）
+
+跟上面「執行方式」的 SITL 版本是**同一條 pipeline、同一批橋接節點**，差別只在
+真機沒有 Gazebo，所以拿掉了 `clock_bridge` 節點跟所有 `use_sim_time: true`
+（詳見下方「跟 SITL 版的差異」）。`odom_bridge`/`cmd_vel_bridge`/
+`fake_scan_publisher` 這三個節點的程式碼**完全沒改**，SITL 能跑代表真機的橋接邏輯
+本身沒問題，真機階段要驗證的是「接了真飛控、跑在 RPi4 上」這個環境本身。
+
+### 跟 SITL 版的差異
+
+| | `nav2_uav_bringup_launch.py`（SITL） | `nav2_uav_bringup_real_launch.py`（真機） |
+|---|---|---|
+| `clock_bridge` | 有，橋接 Gazebo `/clock` | 沒有——真機沒有 Gazebo 可訂閱 |
+| `use_sim_time` | 每個節點都設 `true` | 不傳這個參數，節點預設 `false`，用系統時鐘 |
+| `odom_bridge`/`cmd_vel_bridge`/`fake_scan_publisher`/TF 節點 | 一樣 | 一樣，程式碼完全沒改 |
+| `apriltag_pipeline_launch.py` | 獨立第三個終端機另外開 | **目前還沒接進真機流程**，先只驗證「Nav2 送目標→PX4 飛過去」這條路，不驗避障（見下方「已知限制」） |
+
+### 前置需求
+
+- RPi4 上已經 `colcon build --packages-select nav2_uav_bridge`（跟 SITL 開發機是分開的 `ros2_ws`，要各自 build）。
+- `px4_msgs` 的版本要對到 RPi 上實際連接的**飛控韌體版本**，不是對到開發機上 SITL 用的版本——這兩個很容易搞混，版本對不上時 topic 不會報錯，只會欄位悄悄變空/亂掉。
+- 確認 PX4 的 `UXRCE_DDS_CFG` 參數指到接飛控的那個序列埠（例如 `TELEM2` → `/dev/ttyAMA0`），baudrate 要跟 agent 指令一致。
+- 如果要用筆電開 RViz：RPi 跟筆電要在同一個網段、`ROS_DOMAIN_ID` 一致、雙方都不能設 `ROS_LOCALHOST_ONLY=1`；如果 WiFi 擋 multicast（很多消費級路由器預設會擋），`ros2 topic list` 在筆電端會看不到 RPi 發的 topic，這種情況要換支援 multicast 的 AP，或改用 Fast DDS Discovery Server。
+
+### 執行步驟
+
+**RPi 上，終端機 1 — uXRCE-DDS agent**
+```bash
+MicroXRCEAgent serial --dev /dev/ttyAMA0 -b 921600
+```
+看到持續有 "session established" 訊息，代表跟飛控橋接成功。
+
+**RPi 上，終端機 2 — Nav2 + 橋接節點（全部 headless，RPi 是 server 沒畫面完全沒問題）**
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch nav2_uav_bridge nav2_uav_bringup_real_launch.py
+```
+
+之後分兩條腿驗證，建議先做第一條、確認 PX4 真的會動之後，再處理第二條的網路/視覺化，比較好定位問題出在哪一段：
+
+**腿一：SSH 進 RPi，純指令列送目標點（不需要 RViz、不需要筆電）**
+```bash
+# 觀察狀態
+ros2 topic echo /cmd_vel
+ros2 topic echo /fmu/out/vehicle_local_position_v1
+
+# 送一個很近的目標點（先小步，別一開始就送很遠）
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+  "{pose: {header: {frame_id: 'map'}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}}"
+```
+能確認：Nav2 有沒有規劃出路徑、`cmd_vel_bridge` 有沒有把 `/cmd_vel` 轉成 offboard setpoint、PX4 有沒有真的 arm + 起飛 + 往目標移動。
+
+**腿二：筆電開 RViz，訂閱 RPi 發布的資料（RPi 不需要跑任何 GUI）**
+```bash
+# 筆電上，只要裝了同版本 ROS2（不用 build 整個 nav2_uav_bridge，但要有 px4_msgs/nav2_msgs 訊息定義能解碼）
+export ROS_DOMAIN_ID=<跟 RPi 一致>
+rviz2 -d /opt/ros/jazzy/share/nav2_bringup/rviz/nav2_default_view.rviz
+```
+先 `ros2 topic list` 確認看得到 `/odom`、`/scan`、costmap 相關 topic 再開 RViz；用「2D Goal Pose」送目標點，效果跟腿一的指令列是同一件事，只是用滑鼠點。
+
+### 安全測試流程（沿用 `formation_offboard` 的階段化做法）
+
+1. **先繫留、低高度**，不要一開始就自由飛。
+2. `fake_scan_publisher` 目前是全空掃描（無障礙物），這個階段**只驗證「Nav2 送目標 → PX4 飛過去」這條 pipeline 通不通**，不驗避障。
+3. 先確認能自己 arm + 切 offboard + 起飛到固定高度並穩住，再送第一個很近的目標點（1~2m 外），看軌跡對不對，確認沒問題後再逐步拉遠拉高。
+
+### RPi4 效能調整
+
+`params/nav2_params.yaml` 已經針對 RPi4（4 核，CPU 是主要瓶頸，不是 RAM）調過，重點是把 MPPI controller 的取樣量砍到原本約 1/12（`controller_frequency` 20→10Hz、`batch_size` 2000→600、`time_steps` 56→30），並把 costmap 解析度從 0.05m 放大到 0.1m。跑起來後可以用 `htop` 或 `ros2 topic hz /cmd_vel` 確認有沒有跟上 10Hz，掉頻的話可以再往下砍 `batch_size`；如果很輕鬆，之後可以調回去換更平滑的軌跡。
+
+### 已知限制
+
+- `apriltag_pipeline_launch.py` 還沒接進真機流程，目前**沒有真實避障**——`fake_scan_publisher` 永遠回報無障礙物，這是刻意的,先只驗證基本 pipeline。
+- `camera_tf` 節點雖然還在真機 launch 裡（發布 `base_link → camera_link` 的 TF），但底下沒有接相機/apriltag pipeline，暫時是個沒人用的 TF,不影響功能。
+- 跟 SITL 版一樣，`map → odom` 是寫死的 identity transform，沒有真正的全域定位；`map` 座標系目前等於無人機自己 PX4 local-position 的原點（起飛點），不是任何外部參考系。
+
 ## 設定檔
 
 - `params/nav2_params.yaml` — 標準 Nav2 參數檔，`local_costmap`/`global_costmap` 都把
