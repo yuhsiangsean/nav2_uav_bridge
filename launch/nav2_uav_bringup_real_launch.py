@@ -1,7 +1,8 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -9,6 +10,13 @@ import os
 def generate_launch_description():
     nav2_bringup_dir = get_package_share_directory('nav2_bringup')
     nav2_uav_bridge_dir = get_package_share_directory('nav2_uav_bridge')
+
+    px4_namespace_arg = DeclareLaunchArgument(
+        'px4_namespace',
+        default_value='MAV4',
+        description='Namespace prefix PX4 publishes /fmu/... topics under (e.g. MAV4 for /MAV4/fmu/...). Empty string for no prefix.',
+    )
+    px4_namespace = LaunchConfiguration('px4_namespace')
 
     static_tf = Node(
         package='tf2_ros',
@@ -35,6 +43,7 @@ def generate_launch_description():
     odom_bridge = Node(
         package='nav2_uav_bridge',
         executable='odom_bridge',
+        parameters=[{'px4_namespace': px4_namespace}],
     )
 
     fake_scan_publisher = Node(
@@ -45,6 +54,7 @@ def generate_launch_description():
     cmd_vel_bridge = Node(
         package='nav2_uav_bridge',
         executable='cmd_vel_bridge',
+        parameters=[{'px4_namespace': px4_namespace}],
     )
 
     nav2_bringup = IncludeLaunchDescription(
@@ -60,6 +70,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        px4_namespace_arg,
         static_tf,
         base_footprint_tf,
         camera_tf,

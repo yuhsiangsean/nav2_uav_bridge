@@ -19,17 +19,21 @@ class CmdVelBridge(Node):
     def __init__(self):
         super().__init__('cmd_vel_bridge')
 
+        self.declare_parameter('px4_namespace', '')
+        px4_ns = self.get_parameter('px4_namespace').value
+        prefix = f'/{px4_ns}' if px4_ns else ''
+
         self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.create_subscription(
-            VehicleLocalPosition, '/fmu/out/vehicle_local_position_v1',
+            VehicleLocalPosition, f'{prefix}/fmu/out/vehicle_local_position_v1',
             self.position_callback, px4_qos)
 
         self.offboard_pub = self.create_publisher(
-            OffboardControlMode, '/fmu/in/offboard_control_mode', px4_qos)
+            OffboardControlMode, f'{prefix}/fmu/in/offboard_control_mode', px4_qos)
         self.setpoint_pub = self.create_publisher(
-            TrajectorySetpoint, '/fmu/in/trajectory_setpoint', px4_qos)
+            TrajectorySetpoint, f'{prefix}/fmu/in/trajectory_setpoint', px4_qos)
         self.command_pub = self.create_publisher(
-            VehicleCommand, '/fmu/in/vehicle_command', px4_qos)
+            VehicleCommand, f'{prefix}/fmu/in/vehicle_command', px4_qos)
 
         self.current_yaw = 0.0
         self.current_z = 0.0

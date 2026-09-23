@@ -20,9 +20,12 @@ class OdomBridge(Node):
     def __init__(self):
 
         super().__init__('odom_bridge')
-        self.create_subscription(   
+        self.declare_parameter('px4_namespace', '')
+        px4_ns = self.get_parameter('px4_namespace').value
+        prefix = f'/{px4_ns}' if px4_ns else ''
+        self.create_subscription(
             VehicleLocalPosition,
-            '/fmu/out/vehicle_local_position_v1',
+            f'{prefix}/fmu/out/vehicle_local_position_v1',
             self.position_callback,
             qos,
         )
