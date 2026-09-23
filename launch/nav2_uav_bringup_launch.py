@@ -8,6 +8,7 @@ import os
 
 def generate_launch_description():
     nav2_bringup_dir = get_package_share_directory('nav2_bringup')
+    nav2_uav_bridge_dir = get_package_share_directory('nav2_uav_bridge')
 
     use_sim_time = {'use_sim_time': True}
 
@@ -65,8 +66,8 @@ def generate_launch_description():
             os.path.join(nav2_bringup_dir, 'launch', 'bringup_launch.py')
         ),
         launch_arguments={
-            'map': '/root/ros2_ws/src/nav2_uav_bridge/maps/blank_map.yaml',
-            'params_file': '/root/ros2_ws/src/nav2_uav_bridge/params/nav2_params.yaml',
+            'map': os.path.join(nav2_uav_bridge_dir, 'maps', 'blank_map.yaml'),
+            'params_file': os.path.join(nav2_uav_bridge_dir, 'params', 'nav2_params.yaml'),
             'use_sim_time': 'true',
             'autostart': 'true',
         }.items(),
