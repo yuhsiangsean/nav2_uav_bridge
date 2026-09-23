@@ -38,8 +38,8 @@ class CmdVelBridge(Node):
         self.offboard_engaged = False
         self.airborne = False
 
-        self.TAKEOFF_ALTITUDE = -2.0   # NED，負值代表高度（2 公尺高）
-        self.ALT_TOLERANCE = 0.3
+        self.TAKEOFF_ALTITUDE = -0.5   # NED，負值代表高度（0.5 公尺高）
+        self.ALT_TOLERANCE = 0.1
 
         self.create_timer(0.1, self.timer_callback)
 
